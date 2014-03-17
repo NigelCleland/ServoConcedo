@@ -4,7 +4,8 @@
 import sys
 import os
 from glob import glob
-for itertools import cycle
+from itertools import cycle
+import csv
 
 # C Dependency Imports
 import pandas as pd
@@ -164,7 +165,7 @@ def price_aggregation(prices, agg_func, *args, **kargs):
                 wsingle["Rolling Median"] = pd.rolling_median(wsingle["Price SUM"], 8)
             reconfig.append(wsingle)
 
-    return pd.concat(reconfig)
+    return pd.concat(reconfig).groupby(["Trading Date", "Trading Period"])[["Price SUM", Rolling Median"]].max()
 
 
 def weekday_weekend(x):
@@ -175,7 +176,8 @@ def year_month(x):
     return x.strftime('%Y_%m')
 
 
-def record_utilisation(energy, reserve, prices, fName, filter_base):
+def record_utilisation(energy, reserve, prices, fName, filter_base,
+                       eprice_mult=2, min_energy=50, rprice=50):
     """
 
     """
@@ -183,6 +185,45 @@ def record_utilisation(energy, reserve, prices, fName, filter_base):
     dp = energy[["Trading_Date", "Trading_Period"]].drop_duplicates()
 
     for i, (date, period) in dp.iterrows():
-        pass
+        actual_price, median_energy = prices.ix[date].ix[period].values
+        wday = weekday_weekend(date)
+
+        eprice = max(median_energy*eprice_mult, min_energy)
+
+        filters = filter_base.copy()
+        filters["Trading_Date"] = date
+        filters["Trading_Period"] = period
+
+        ut, cap = asset_utilisation(energy, reserve, filters)
+        rut = relative_utilisation(ut, cap)
+        dut = desired_utilisation(rut, eprice, rprice)
+
+        oline = [date, period, actual_price, median_energy, wday, dut]
+
+        with open(fName, 'ab') as f:
+            writer = csv.writer(f, delimiter=',')
+            writer.writerow(oline)
+
+
+def create_monthly_files(energy_files, reserve_files):
+    """ Take two lists of strings, sort them to match PLSR and Energy offers by month """
+    monthly_files = defaultdict(dict)
+    all_files = energy_files + reserve_files
+    for each in all_files:
+        date, ftype = parse_name(each)
+        monthly_files[date][ftype] = each
+
+    return monthly_files
+
+
+def parse_name(fName):
+    name = os.path.basename(fName)
+    split = name.split('_')
+    ftype, month, year = '_'.join(split[:2]), split[2], split[3].replace('.csv', '')
+    date = "_".join([month, year])
+    return date, ftype
+
+
+
 
 
