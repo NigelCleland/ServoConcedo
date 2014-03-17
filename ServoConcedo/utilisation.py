@@ -18,6 +18,10 @@ from OfferPandas import Frame, load_offerframe
 sys.path.append('/home/nigel/python/pdtools/')
 import pdtools
 
+# Change some numpy print settings
+np.set_printoptions(suppress=True)
+np.set_printoptions(precision=4)
+
 def get_plsr_stack(frame, filters, reserve_type="FIR", product_type="Both",
                    min_quantity=0.1):
     """
@@ -135,20 +139,32 @@ def desired_utilisation(rel, energy, reserve):
 
 
 def price_aggregation(prices, agg_func, *args, **kargs):
+    """
+
+    """
+
     # Get datetime objects if they aren't already
-    if prices["Trading_Date"].dtype != np.datetime64:
-        prices["Trading_Date"] = pd.to_datetime(prices["Trading_Date"])
+    if prices["Trading Date"].dtype != np.datetime64:
+        prices["Trading Date"] = pd.to_datetime(prices["Trading Date"])
 
     # Get the Day of the week
-    prices["Weekdays"] = prices["Trading_Date"].apply(weekday_weekend)
+    prices["Weekdays"] = prices["Trading Date"].apply(weekday_weekend)
 
     # Apply the Year Month
-    prices["Year_Month"] = prices["Trading_Date"].apply(year_month)
+    prices["Year_Month"] = prices["Trading Date"].apply(year_month)
 
-    # Groupby and return values
-    return prices.groupby(["Year_Month", "Weekdays",
-                            "Trading_Period"])["Price SUM"].aggregate(
-                            agg_func, *args, **kargs)
+    reconfig = []
+    for period in xrange(1,49):
+        single = prices[prices["Trading Period"] == period]
+        for weekday in ("Weekday", "Weekend"):
+            wsingle = single["Weekdays"] == weekday
+            if weekday == "Weekday":
+                wsingle["Rolling Median"] = pd.rolling_median(wsingle["Price SUM"], 20)
+            else:
+                wsingle["Rolling Median"] = pd.rolling_median(wsingle["Price SUM"], 8)
+            reconfig.append(wsingle)
+
+    return pd.concat(reconfig)
 
 
 def weekday_weekend(x):
@@ -157,3 +173,16 @@ def weekday_weekend(x):
 
 def year_month(x):
     return x.strftime('%Y_%m')
+
+
+def record_utilisation(energy, reserve, prices, fName, filter_base):
+    """
+
+    """
+
+    dp = energy[["Trading_Date", "Trading_Period"]].drop_duplicates()
+
+    for i, (date, period) in dp.iterrows():
+        pass
+
+
